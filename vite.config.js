@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/LMS/', // Required for GitHub Pages deployment matching the repo name
+  base: '/Northex_Campus-/', // Updated for new repo
 })
