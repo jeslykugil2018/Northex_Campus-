@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/Northex_Campus-/', // Updated for new repo
+  base: './', // Using relative paths to avoid case-sensitivity issues on GitHub Pages
 })
