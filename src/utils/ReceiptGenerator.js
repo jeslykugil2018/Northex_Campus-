@@ -2,212 +2,252 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
-export const generateReceipt = (payment) => {
-    console.log('--- Generating Geometric Payment Receipt ---');
+// Fee Structure Constants (must match Finance.jsx)
+const COURSE_FEE = 90000;
+const FEE_BREAKDOWN = [
+    { label: 'Registration Fee', amount: 20000 },
+    { label: '1st Installment', amount: 25000 },
+    { label: '2nd Installment', amount: 45000 },
+];
+
+export const generateReceipt = (payment, allStudentPayments = []) => {
+    console.log('--- Generating Premium Tabular Receipt ---');
 
     try {
         const doc = new jsPDF();
-        const campusName = payment.students?.campuses?.name || 'NORTHEX CAMPUS';
+        const campusName = payment.students?.campuses?.name || 'Northex';
         const student = payment.students || {};
+        const center = 105;
 
-        // --- Design Tokens (from reference image) ---
+        // Calculate cumulative payment info
+        const totalPaidByStudent = allStudentPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+        const remainingBalance = Math.max(0, COURSE_FEE - totalPaidByStudent);
+
+        // Determine installment statuses for the detailed table
+        let runningPaid = totalPaidByStudent;
+        const installmentStatus = FEE_BREAKDOWN.map(fee => {
+            if (runningPaid >= fee.amount) {
+                runningPaid -= fee.amount;
+                return { ...fee, status: 'Paid', paidAmount: fee.amount, remainingAmount: 0 };
+            } else if (runningPaid > 0) {
+                const partial = runningPaid;
+                runningPaid = 0;
+                return { ...fee, status: 'Partial', paidAmount: partial, remainingAmount: fee.amount - partial };
+            } else {
+                return { ...fee, status: 'Unpaid', paidAmount: 0, remainingAmount: fee.amount };
+            }
+        });
+
+        // --- Design Tokens ---
         const colors = {
-            darkGray: [33, 33, 33],      // #212121
-            blueAccent: [83, 114, 240],   // #5372f0 (Matches the blue polygons)
-            lightBlueLine: [180, 195, 255], // Soft blue connecting lines
-            textDark: [30, 30, 30],       // Nearly black text
-            border: [230, 230, 230]       // Light table border
+            darkGray: [33, 33, 33],
+            blueAccent: [0, 106, 255], // Institutional Blue
+            greenAccent: [34, 197, 94], // Healthy Green
+            textDark: [30, 30, 30],
+            border: [230, 230, 230],
+            success: [22, 163, 74],
+            error: [220, 38, 38],
+            muted: [100, 100, 100],
         };
 
         // ==========================================
-        // 1. Geometric Header Graphics
+        // 1. Premium Branded Header
         // ==========================================
 
-        // --- Top Left Corner Shapes ---
-        // Black main triangle
-        doc.setFillColor(...colors.darkGray);
-        doc.triangle(0, 0, 45, 0, 0, 45, 'F');
+        // --- Blue Block Logo Design ---
+        const logoY = 15;
+        
+        // Main Blue Container
+        doc.setFillColor(0, 106, 255); // #006aff Institutional Blue
+        doc.rect(center - 30, logoY, 60, 28, 'F');
 
-        // Inner blue triangle right next to it
-        doc.setFillColor(...colors.blueAccent);
-        doc.triangle(0, 45, 30, 15, 0, 15, 'F');
-        // Black secondary polygon below
-        doc.setFillColor(...colors.darkGray);
-        doc.triangle(0, 45, 30, 45, 0, 75, 'F');
-
-        // Light blue connecting line
-        doc.setDrawColor(...colors.lightBlueLine);
-        doc.setLineWidth(1.5);
-        doc.line(30, 15, 45, 0);
-
-        // --- Top Right Corner Shapes ---
-        // Black main triangle
-        doc.setFillColor(...colors.darkGray);
-        doc.triangle(210, 0, 165, 0, 210, 45, 'F');
-
-        // Inner blue triangle next to it
-        doc.setFillColor(...colors.blueAccent);
-        doc.triangle(210, 45, 180, 15, 210, 15, 'F');
-        // Black secondary polygon below
-        doc.setFillColor(...colors.darkGray);
-        doc.triangle(210, 45, 180, 45, 210, 75, 'F');
-
-        // Light blue connecting line
-        doc.setDrawColor(...colors.lightBlueLine);
-        doc.setLineWidth(1.5);
-        doc.line(180, 15, 165, 0);
-
-        // ==========================================
-        // 2. Institution Logo Box (NORTHEX CAMPUS)
-        // ==========================================
-        const isNorthex = campusName.toLowerCase().includes('northex');
-
-        // Blue Logo Box
-        doc.setFillColor(0, 109, 255); // The specific blue in the logo
-        doc.rect(130, 25, 45, 20, 'F');
-
-        // Logo Text (White Box, Blue "NORTHEX", Black "CAMPUS")
-        doc.setFillColor(255, 255, 255);
-        doc.rect(132, 27, 41, 16, 'F');
-
+        // "NORTHEX" in White
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(0, 109, 255);
-        doc.text(isNorthex ? 'NORTHEX' : 'UPBOLD', 133.5, 35);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(0, 0, 0);
-        // Slightly tighter letter spacing for CAMPUS
-        doc.text(isNorthex ? 'CAMPUS' : 'CAMPUS', 133.5, 42);
-
-        // ==========================================
-        // 3. Receipt Title
-        // ==========================================
-        const titleY = 65;
-        doc.setTextColor(...colors.textDark);
         doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Payment Receipt', 105, titleY, { align: 'center' });
+        doc.setTextColor(255, 255, 255);
+        doc.text('NORTHEX', center, logoY + 12, { align: 'center' });
+
+        // White Rectangle for "CAMPUS"
+        doc.setFillColor(255, 255, 255);
+        doc.rect(center - 26, logoY + 15, 52, 9, 'F');
+
+        // "CAMPUS" in Black
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(18);
+        doc.text('CAMPUS', center, logoY + 22, { align: 'center' });
+
+        // Tagline
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...colors.muted);
+        doc.text('Industry-Standard Digital Skills Training • Northex Campus • Mullaitivu', center, logoY + 40, { align: 'center' });
+
+        // Divider Line
+        doc.setDrawColor(...colors.border);
+        doc.setLineWidth(0.2);
+        doc.line(40, logoY + 46, 170, logoY + 46);
 
         // ==========================================
-        // 4. Student Details
+        // 2. Receipt Title
         // ==========================================
-        const detailsY = 85;
-        doc.setFontSize(10);
+        const titleY = logoY + 56;
+        doc.setTextColor(...colors.textDark);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PAYMENT RECEIPT', center, titleY, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(110, 110, 110);
+        doc.text(`REF: ${payment.id.substring(0, 8).toUpperCase()}`, center, titleY + 7, { align: 'center' });
+
+        // ==========================================
+        // 3. Identification Details
+        // ==========================================
+        const detailsY = titleY + 20;
+        doc.setFontSize(10.5);
         doc.setTextColor(...colors.textDark);
 
+        // Column 1
         doc.setFont('helvetica', 'bold');
-        doc.text('Date: ', 20, detailsY);
+        doc.text('Date:', 20, detailsY);
         doc.setFont('helvetica', 'normal');
-        doc.text(format(new Date(payment.created_at), 'MMMM dd, yyyy'), 32, detailsY);
+        doc.text(format(new Date(payment.created_at), 'MMMM dd, yyyy'), 33, detailsY);
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Student Name: ', 20, detailsY + 8);
+        doc.text('Student Name:', 20, detailsY + 12);
         doc.setFont('helvetica', 'normal');
-        doc.text(student.full_name || 'N/A', 47, detailsY + 8);
+        doc.text((student.full_name || 'N/A').toUpperCase(), 48, detailsY + 12);
+
+        // Column 2
+        doc.setFont('helvetica', 'bold');
+        doc.text('Campus:', 120, detailsY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(campusName.split(' ')[0], 138, detailsY);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Payment Method:', 120, detailsY + 12);
+        doc.setFont('helvetica', 'normal');
+        doc.text(payment.method || 'Cash', 153, detailsY + 12);
 
         // ==========================================
-        // 5. Payment Table
+        // 4. Current Transaction Table
         // ==========================================
-        const tableStartY = 110;
-        const subtotal = Number(payment.amount);
-
+        const table1Y = detailsY + 30;
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.text('Payment Details', 20, tableStartY - 5);
+        doc.setFontSize(10.5);
+        doc.text('Current Transaction', 20, table1Y - 6);
 
         autoTable(doc, {
-            startY: tableStartY,
-            head: [['Description', 'Amount ($)']],
+            startY: table1Y,
+            head: [['Description', 'Amount (LKR)']],
             body: [
-                [
-                    payment.note || 'Tuition Fee',
-                    subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                ]
+                [payment.note || 'Tuition Fees', `Rs. ${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`]
             ],
             foot: [
-                ['Total Amount Paid', subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })]
+                ['Amount Paid', `Rs. ${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`]
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [51, 65, 85], fontStyle: 'bold', halign: 'center' },
+            bodyStyles: { halign: 'center', fontSize: 10 },
+            footStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+            columnStyles: { 0: { halign: 'left' } }
+        });
+
+        // ==========================================
+        // 5. Fee Structure Table
+        // ==========================================
+        const table2Y = doc.lastAutoTable.finalY + 20;
+
+        const feeRows = installmentStatus.map(inst => {
+            const isSettled = inst.remainingAmount === 0;
+            return [
+                inst.label,
+                `Rs. ${inst.amount.toLocaleString()}`,
+                `Rs. ${inst.paidAmount.toLocaleString()}`,
+                isSettled ? 'Settled' : `Rs. ${inst.remainingAmount.toLocaleString()}`
+            ];
+        });
+
+        autoTable(doc, {
+            startY: table2Y,
+            head: [['Fee Component', 'Amount (LKR)', 'Paid (LKR)', 'Remaining (LKR)']],
+            body: feeRows,
+            foot: [
+                [
+                    'Total',
+                    `Rs. ${COURSE_FEE.toLocaleString()}`,
+                    `Rs. ${totalPaidByStudent.toLocaleString()}`,
+                    remainingBalance === 0 ? 'Fully Settled' : `Rs. ${remainingBalance.toLocaleString()}`
+                ]
             ],
             theme: 'grid',
             headStyles: {
-                fillColor: [248, 248, 248], // Very light gray
-                textColor: colors.darkGray,
-                fontSize: 9,
-                fontStyle: 'bold',
+                fillColor: colors.blueAccent,
+                textColor: [255, 255, 255],
                 halign: 'center',
-                lineColor: colors.border,
-                lineWidth: 0.1,
+                fontSize: 10
             },
-            bodyStyles: {
-                textColor: colors.darkGray,
-                fontSize: 9,
-                halign: 'center', // Center aligned body text
-                lineColor: colors.border,
-                lineWidth: 0.1,
-            },
-            footStyles: {
-                fillColor: [255, 255, 255], // White background for footer
-                textColor: colors.darkGray,
-                fontSize: 9,
-                fontStyle: 'bold',
-                halign: 'center',
-                lineColor: colors.border,
-                lineWidth: 0.1,
-            },
-            columnStyles: {
-                0: { halign: 'left', cellWidth: 100 }, // Description left aligned
-                1: { halign: 'center' }                 // Amount Center aligned
+            bodyStyles: { halign: 'center', fontSize: 9.5 },
+            footStyles: { fillColor: [248, 250, 252], fontStyle: 'bold', halign: 'center', fontSize: 10 },
+            columnStyles: { 0: { halign: 'left' } },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 2 && data.cell.raw !== 'Rs. 0') {
+                    data.cell.styles.textColor = colors.success;
+                    data.cell.styles.fontStyle = 'bold';
+                }
+                if (data.section === 'body' && data.column.index === 3) {
+                    if (data.cell.raw === 'Settled') {
+                        data.cell.styles.textColor = colors.success;
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (data.cell.raw !== 'Rs. 0') {
+                        data.cell.styles.textColor = colors.error;
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
+                if (data.section === 'foot') {
+                    if (data.column.index === 0 || data.column.index === 1) {
+                        data.cell.styles.textColor = colors.blueAccent;
+                    }
+                    if (data.column.index === 2) data.cell.styles.textColor = colors.success;
+                    if (data.column.index === 3) {
+                        data.cell.styles.textColor = remainingBalance === 0 ? colors.success : colors.error;
+                    }
+                }
             }
         });
 
         // ==========================================
-        // 6. Meta Information
+        // 6. Official Validation (Seal & Signature) - Fixed to Bottom
         // ==========================================
-        const metaY = doc.lastAutoTable.finalY + 15;
-        doc.setFontSize(10);
+        const stampY = 240;
+
+        // Signature Line (Bottom Left)
+        doc.setDrawColor(200, 200, 200);
+        doc.line(30, stampY + 10, 80, stampY + 10);
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7);
         doc.setTextColor(...colors.textDark);
-
-        doc.setFont('helvetica', 'bold');
-        doc.text('Received from: ', 20, metaY);
-        doc.setFont('helvetica', 'normal');
-        doc.text(campusName, 47, metaY);
-
-        doc.setFont('helvetica', 'bold');
-        doc.text('Payment Method: ', 20, metaY + 8);
-        doc.setFont('helvetica', 'normal');
-        doc.text(payment.method || 'Standard', 52, metaY + 8);
+        doc.text('R. Vaakeshan', 55, stampY + 16, { align: 'center' });
+        doc.setFontSize(6.5);
+        doc.text('NORTHEX CAMPUS Director', 55, stampY + 21, { align: 'center' });
 
         // ==========================================
-        // 7. Footer
+        // 7. Final Message (Very Bottom)
         // ==========================================
-        const footerY = 220;
-
-        // Very thin separator line
-        doc.setDrawColor(...colors.border);
-        doc.setLineWidth(0.1);
-        doc.line(20, footerY - 5, 190, footerY - 5);
-
-        doc.setTextColor(50, 50, 50); // Muted gray
+        const finalMessageY = 280;
         doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-
-        const footerText1 = `Thank you for your payment. Should you have any questions or require further details, please do`;
-        const footerText2 = `not hesitate to contact us at [].`;
-
-        doc.text(footerText1, 20, footerY + 3);
-        doc.text(footerText2, 20, footerY + 8);
-
-        // Page Number
-        doc.setTextColor(150, 150, 150); // Light gray
-        doc.text('01', 185, 280, { align: 'right' });
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(80, 80, 80);
+        doc.text('Payment received successfully! Thank you for choosing NORTHEX CAMPUS.', center, finalMessageY, { align: 'center' });
+        doc.text('We appreciate your continued support and commitment.', center, finalMessageY + 6, { align: 'center' });
 
         // Generate and Save
         const safeName = (student.full_name || 'Receipt').replace(/\s+/g, '_');
-        doc.save(`Payment_Receipt_${safeName}.pdf`);
+        doc.save(`Official_Tuition_Receipt_${safeName}.pdf`);
 
     } catch (err) {
-        console.error('Geometric Receipt Generation Error:', err);
-        alert('Could not generate receipt layout: ' + err.message);
+        console.error('Receipt Generation Error:', err);
+        alert('Could not generate receipt: ' + err.message);
     }
 };

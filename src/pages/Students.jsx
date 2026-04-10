@@ -61,7 +61,7 @@ const Students = () => {
 
     let studentQuery = supabase.from('students').select('*, campuses(name)')
 
-    if (selectedCampusId !== 'all') {
+    if (selectedCampusId && selectedCampusId !== 'all') {
       studentQuery = studentQuery.eq('campus_id', selectedCampusId)
     } else if (adminRecord?.role !== 'Super Admin') {
       studentQuery = studentQuery.eq('campus_id', adminRecord?.campus_id)

@@ -1,10 +1,18 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, Calendar, Search, CreditCard, Receipt, Plus, Download, ArrowLeft, Edit2, Trash2 } from 'lucide-react'
+import { Search, CreditCard, Receipt, Plus, Download, ArrowLeft, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { format } from 'date-fns'
 import { generateReceipt } from '../utils/ReceiptGenerator'
+
+// Fee Structure Constants
+const COURSE_FEE = 90000
+const FEE_BREAKDOWN = [
+    { label: 'Registration Fee', amount: 20000 },
+    { label: '1st Installment', amount: 25000 },
+    { label: '2nd Installment', amount: 45000 },
+]
 
 const Finance = () => {
     const { adminRecord, selectedCampusId } = useAuth()
@@ -16,6 +24,7 @@ const Finance = () => {
     const [newPayment, setNewPayment] = useState({ student_id: '', amount: '', method: 'Cash', note: '' })
     const [editingPayment, setEditingPayment] = useState(null)
     const [students, setStudents] = useState([])
+    const [searchFilter, setSearchFilter] = useState('')
 
     useEffect(() => {
         fetchPayments()
@@ -31,7 +40,8 @@ const Finance = () => {
             .select('*, students!inner(full_name, email, phone, district, campus_id, campuses(name))')
             .order('created_at', { ascending: false })
 
-        if (selectedCampusId !== 'all') {
+        // Filter by campus if applicable
+        if (selectedCampusId && selectedCampusId !== 'all') {
             query = query.eq('students.campus_id', selectedCampusId)
         } else if (adminRecord.role !== 'Super Admin') {
             query = query.eq('students.campus_id', adminRecord.campus_id)
@@ -43,17 +53,53 @@ const Finance = () => {
     }
 
     const fetchStudents = async () => {
-        let query = supabase.from('students').select('id, full_name, campus_id')
+        let query = supabase.from('students').select('id, full_name, campus_id, campuses(name)')
 
-        if (selectedCampusId !== 'all') {
+        if (selectedCampusId && selectedCampusId !== 'all') {
             query = query.eq('campus_id', selectedCampusId)
-        } else if (adminRecord.role !== 'Super Admin') {
+        } else if (adminRecord?.role !== 'Super Admin') {
             query = query.eq('campus_id', adminRecord.campus_id)
         }
 
         const { data } = await query
         setStudents(data || [])
     }
+
+    // Per-student fee status calculation
+    const studentFeeStatus = useMemo(() => {
+        return students.map(student => {
+            const studentPayments = payments.filter(p => p.student_id === student.id)
+            const totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+            const remaining = Math.max(0, COURSE_FEE - totalPaid)
+            const percentage = Math.min(100, (totalPaid / COURSE_FEE) * 100)
+
+            // Determine which installments are covered
+            let runningPaid = totalPaid
+            const installmentStatus = FEE_BREAKDOWN.map(fee => {
+                if (runningPaid >= fee.amount) {
+                    runningPaid -= fee.amount
+                    return { ...fee, status: 'paid', paidAmount: fee.amount, remainingAmount: 0 }
+                } else if (runningPaid > 0) {
+                    const partial = runningPaid
+                    runningPaid = 0
+                    return { ...fee, status: 'partial', paidAmount: partial, remainingAmount: fee.amount - partial }
+                } else {
+                    return { ...fee, status: 'unpaid', paidAmount: 0, remainingAmount: fee.amount }
+                }
+            })
+
+            return {
+                ...student,
+                totalPaid,
+                remaining,
+                percentage,
+                installmentStatus,
+                paymentCount: studentPayments.length
+            }
+        })
+    }, [students, payments])
+
+
 
     const handleAddPayment = async (e) => {
         e.preventDefault()
@@ -68,12 +114,13 @@ const Finance = () => {
             alert('Error saving payment: ' + error.message)
         } else {
             setShowModal(false)
-            fetchPayments()
+            await fetchPayments()
             setNewPayment({ student_id: '', amount: '', method: 'Cash', note: '' })
 
-            // Auto-generate receipt
             if (data) {
-                generateReceipt(data)
+                // Include all payments for this student (existing + new one)
+                const studentPayments = [...payments.filter(p => p.student_id === data.student_id), data]
+                generateReceipt(data, studentPayments)
             }
         }
         setLoading(false)
@@ -150,12 +197,20 @@ const Finance = () => {
         link.click()
     }
 
+    // Filtered payments for search
+    const filteredPayments = useMemo(() => {
+        if (!searchFilter) return payments
+        return payments.filter(p =>
+            p.students?.full_name?.toLowerCase().includes(searchFilter.toLowerCase())
+        )
+    }, [payments, searchFilter])
+
     return (
         <div className="finance-page">
             <div className="header-actions">
                 <div>
                     <h1 className="page-title">Finance & Payments</h1>
-                    <p className="page-subtitle">Track student invoices and transaction history</p>
+                    <p className="page-subtitle">Track student invoices, fee structure & transaction history</p>
                 </div>
                 <div className="action-btns">
                     <button className="btn btn-outline" onClick={exportToCSV}>
@@ -169,44 +224,100 @@ const Finance = () => {
                 </div>
             </div>
 
-            <div className="finance-summary stats-grid">
-                <div className="stat-card card">
-                    <div className="stat-content">
-                        <span className="stat-label">Total Collected</span>
-                        <h2 className="stat-value text-success">
-                            LKR {payments.reduce((sum, p) => sum + Number(p.amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </h2>
+            {/* ── Fee Structure Overview ── */}
+            <div className="fee-structure-card card">
+                <div className="fee-structure-header">
+                    <div>
+                        <h3>Course Fee Structure</h3>
+                        <p className="fee-subtitle">Total Course Fee: <strong>LKR {COURSE_FEE.toLocaleString()}</strong></p>
                     </div>
-                    <DollarSign size={32} className="stat-icon-bg" />
                 </div>
-                <div className="stat-card card">
-                    <div className="stat-content">
-                        <span className="stat-label">Transactions</span>
-                        <h2 className="stat-value">{loading ? '...' : payments.length}</h2>
-                    </div>
-                    <Receipt size={32} className="stat-icon-bg" />
+                <div className="fee-breakdown-grid">
+                    {FEE_BREAKDOWN.map((fee, idx) => (
+                        <div key={idx} className={`fee-item fee-item-${idx}`}>
+                            <div className="fee-item-step">Step {idx + 1}</div>
+                            <div className="fee-item-label">{fee.label}</div>
+                            <div className="fee-item-amount">LKR {fee.amount.toLocaleString()}</div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            <style>{`
-                .loading-spinner {
-                    width: 32px;
-                    height: 32px;
-                    border: 3px solid #f1f5f9;
-                    border-top: 3px solid #006aff;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                    margin: 0 auto;
-                }
-                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            `}</style>
 
+
+            {/* ── Per-Student Fee Status ── */}
+            <div className="payments-list card" style={{ marginBottom: '2.5rem' }}>
+                <div className="card-header">
+                    <h3>Per-Student Fee Status</h3>
+                    <span className="header-badge">{studentFeeStatus.length} students</span>
+                </div>
+                <div className="fee-status-table-wrap">
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Campus</th>
+                                <th className="text-right">Total Fee</th>
+                                <th className="text-right">Paid</th>
+                                <th className="text-right">Remaining</th>
+                                <th>Registration</th>
+                                <th>1st Installment</th>
+                                <th>2nd Installment</th>
+                                
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan="8" className="text-center py-8">
+                                    <div className="loading-spinner"></div>
+                                    <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Loading fee data...</p>
+                                </td></tr>
+                            ) : studentFeeStatus.length === 0 ? (
+                                <tr><td colSpan="8" className="text-center">No students found.</td></tr>
+                            ) : studentFeeStatus.map(s => (
+                                <tr key={s.id}>
+                                    <td><strong>{s.full_name}</strong></td>
+                                    <td>{s.campuses?.name || '—'}</td>
+                                    <td className="text-right">LKR {COURSE_FEE.toLocaleString()}</td>
+                                    <td className="text-right"><strong className="text-success">LKR {s.totalPaid.toLocaleString()}</strong></td>
+                                    <td className="text-right">
+                                        <strong className={s.remaining > 0 ? 'text-warning' : 'text-success'}>
+                                            {s.remaining > 0 ? `LKR ${s.remaining.toLocaleString()}` : 'Settled'}
+                                        </strong>
+                                    </td>
+                                    {s.installmentStatus.map((inst, idx) => (
+                                        <td key={idx}>
+                                            <div className="installment-detail">
+                                                <div className={`inst-paid ${inst.status}`}>
+                                                    <span className="inst-label">Paid:</span>
+                                                    <span className="inst-value">LKR {inst.paidAmount?.toLocaleString()}</span>
+                                                </div>
+                                                <div className={`inst-remaining ${inst.remainingAmount > 0 ? 'has-balance' : 'settled'}`}>
+                                                    <span className="inst-label">Due:</span>
+                                                    <span className="inst-value">{inst.remainingAmount > 0 ? `LKR ${inst.remainingAmount?.toLocaleString()}` : 'Settled'}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* ── Payment History ── */}
             <div className="payments-list card">
                 <div className="card-header">
                     <h3>Payment History</h3>
                     <div className="search-box">
                         <Search size={16} />
-                        <input type="text" placeholder="Filter by student..." />
+                        <input
+                            type="text"
+                            placeholder="Filter by student..."
+                            value={searchFilter}
+                            onChange={(e) => setSearchFilter(e.target.value)}
+                        />
                     </div>
                 </div>
 
@@ -219,16 +330,19 @@ const Finance = () => {
                             <th>Method</th>
                             <th className="text-right">Amount</th>
                             <th>Status</th>
+                            <th>Receipt</th>
                             <th className="text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="7" className="text-center py-8">
+                            <tr><td colSpan="8" className="text-center py-8">
                                 <div className="loading-spinner"></div>
                                 <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing financial data...</p>
                             </td></tr>
-                        ) : payments.map((p) => (
+                        ) : filteredPayments.length === 0 ? (
+                            <tr><td colSpan="8" className="text-center">No payment records found.</td></tr>
+                        ) : filteredPayments.map((p) => (
                             <tr key={p.id}>
                                 <td>{format(new Date(p.created_at), 'MMM dd, yyyy HH:mm')}</td>
                                 <td><strong>{p.students?.full_name}</strong></td>
@@ -240,15 +354,17 @@ const Finance = () => {
                                 </td>
                                 <td className="text-right"><strong className="text-success">LKR {Number(p.amount).toFixed(2)}</strong></td>
                                 <td><span className="status-badge active">Cleared</span></td>
+                                <td>
+                                    <button
+                                        className="receipt-download-btn"
+                                        onClick={() => generateReceipt(p, payments.filter(pay => pay.student_id === p.student_id))}
+                                    >
+                                        <Download size={14} />
+                                        Download Receipt
+                                    </button>
+                                </td>
                                 <td className="actions-cell">
                                     <div className="action-row">
-                                        <button
-                                            className="icon-btn"
-                                            onClick={() => generateReceipt(p)}
-                                            title="Receipt"
-                                        >
-                                            <Receipt size={16} />
-                                        </button>
                                         <button
                                             className="icon-btn"
                                             onClick={() => handleEditPayment(p)}
@@ -389,6 +505,17 @@ const Finance = () => {
             </div>
 
             <style>{`
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid #f1f5f9;
+            border-top: 3px solid #006aff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         .page-footer {
           margin-top: 5rem;
           padding-top: 2rem;
@@ -396,7 +523,7 @@ const Finance = () => {
           display: flex;
           justify-content: center;
         }
-        .finance-page { animation: fadeIn 0.4s ease-out; padding: 2rem 2rem 6rem; max-width: 1100px; margin: 0 auto; }
+        .finance-page { animation: fadeIn 0.4s ease-out; padding: 2rem 2rem 6rem; max-width: 1400px; margin: 0 auto; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .header-actions {
@@ -410,13 +537,91 @@ const Finance = () => {
         .page-subtitle { color: #64748b; font-size: 0.95rem; font-weight: 500; font-family: 'Plus Jakarta Sans', sans-serif; }
         
         .action-btns { display: flex; gap: 1.5rem; }
-        
-        .finance-summary { margin-bottom: 3.5rem; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; }
+
+        /* ── Fee Structure Card ── */
+        .fee-structure-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            padding: 2.5rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        .fee-structure-header {
+            margin-bottom: 2rem;
+        }
+        .fee-structure-header h3 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        .fee-subtitle {
+            color: #64748b;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .fee-subtitle strong {
+            color: #0f172a;
+            font-weight: 900;
+            font-size: 1.1rem;
+        }
+        .fee-breakdown-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+        .fee-item {
+            padding: 1.75rem;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .fee-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+        .fee-item-0::before { background: linear-gradient(90deg, #006aff, #38bdf8); }
+        .fee-item-1::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .fee-item-2::before { background: linear-gradient(90deg, #10b981, #34d399); }
+        .fee-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+        }
+        .fee-item-step {
+            font-size: 0.6875rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #94a3b8;
+            margin-bottom: 0.75rem;
+        }
+        .fee-item-label {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #334155;
+            margin-bottom: 0.5rem;
+        }
+        .fee-item-amount {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #0f172a;
+        }
+
+        /* ── Stats ── */
+        .finance-summary { margin-bottom: 2.5rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
         
         .stat-card { 
             position: relative; 
-            padding: 2.25rem; 
+            padding: 2rem; 
             border-radius: 24px; 
             border: 1px solid #e2e8f0; 
             background: white;
@@ -426,19 +631,22 @@ const Finance = () => {
         .stat-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08); }
         
         .stat-label { font-size: 0.8125rem; text-transform: uppercase; font-weight: 800; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 0.5rem; display: block; }
-        .stat-value { font-size: 1.75rem; font-weight: 900; color: #0f172a; margin-top: 0.25rem; }
+        .stat-value { font-size: 1.5rem; font-weight: 900; color: #0f172a; margin-top: 0.25rem; }
         
         .stat-icon-bg {
           color: #10b981;
           position: absolute;
-          right: 2rem;
+          right: 1.5rem;
           top: 50%;
           transform: translateY(-50%);
           opacity: 0.08;
           width: 56px !important;
           height: 56px !important;
         }
+        .stat-icon-bg.icon-warning { color: #f59e0b; }
+        .stat-icon-bg.icon-success { color: #10b981; }
 
+        /* ── Tables ── */
         .payments-list { 
             border-radius: 24px; 
             overflow: hidden; 
@@ -447,8 +655,10 @@ const Finance = () => {
             background: white;
         }
 
+        .fee-status-table-wrap { overflow-x: auto; }
+
         .card-header {
-            padding: 2rem 2.5rem;
+            padding: 1.75rem 2rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -456,6 +666,17 @@ const Finance = () => {
             border-bottom: 1px solid #e2e8f0;
         }
         .card-header h3 { font-size: 1.25rem; font-weight: 800; color: #1e293b; letter-spacing: -0.01em; }
+
+        .header-badge {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 0.4rem 1rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
 
         .search-box { position: relative; width: 300px; }
         .search-box svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
@@ -473,20 +694,112 @@ const Finance = () => {
         .data-table { width: 100%; border-collapse: collapse; }
         .data-table th {
             text-align: left;
-            padding: 1.5rem 1.25rem;
+            padding: 1.25rem 1rem;
             background: #f8fafc;
             color: #475569;
             font-weight: 800;
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
         }
-        .data-table th.text-right { text-align: right; } /* Added for right-aligning headers */
+        .data-table th.text-right { text-align: right; }
 
-        .data-table td { padding: 1.5rem 1.25rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .data-table td { padding: 1.25rem 1rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; font-size: 0.9rem; }
         .data-table tr:last-child td { border-bottom: none; }
         .data-table tr:hover { background-color: #fcfdfe; }
+
+        /* ── Installment Detail Cells ── */
+        .installment-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            min-width: 130px;
+        }
+        .inst-paid, .inst-remaining {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .inst-label {
+            color: #94a3b8;
+            font-weight: 800;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            min-width: 30px;
+        }
+        .inst-value {
+            font-weight: 800;
+        }
+        .inst-paid.paid {
+            background: #f0fdf4;
+        }
+        .inst-paid.paid .inst-value {
+            color: #16a34a;
+        }
+        .inst-paid.partial {
+            background: #fffbeb;
+        }
+        .inst-paid.partial .inst-value {
+            color: #d97706;
+        }
+        .inst-paid.unpaid {
+            background: #f8fafc;
+        }
+        .inst-paid.unpaid .inst-value {
+            color: #94a3b8;
+        }
+        .inst-remaining.has-balance {
+            background: #fef2f2;
+        }
+        .inst-remaining.has-balance .inst-value {
+            color: #dc2626;
+        }
+        .inst-remaining.settled {
+            background: #f0fdf4;
+        }
+        .inst-remaining.settled .inst-value {
+            color: #16a34a;
+        }
+
+        /* ── Progress Bar ── */
+        .progress-bar-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 120px;
+        }
+        .progress-bar {
+            flex: 1;
+            height: 8px;
+            background: #f1f5f9;
+            border-radius: 100px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 100px;
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .progress-fill.half {
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        }
+        .progress-fill.complete {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+        .progress-label {
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: #64748b;
+            min-width: 32px;
+        }
 
         .method-tag {
           display: inline-flex;
@@ -498,6 +811,29 @@ const Finance = () => {
           font-size: 0.8125rem;
           font-weight: 700;
           color: #475569;
+        }
+
+        .receipt-download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0f7ff 100%);
+            border: 1px solid #bae6fd;
+            border-radius: 10px;
+            color: #0369a1;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+        }
+        .receipt-download-btn:hover {
+            background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+            color: white;
+            border-color: #0ea5e9;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px -3px rgba(14, 165, 233, 0.35);
         }
 
         .status-badge {
@@ -512,6 +848,8 @@ const Finance = () => {
         }
 
         .text-success { color: #10b981; }
+        .text-warning { color: #f59e0b; }
+        .text-right { text-align: right; }
 
         .modal-overlay {
           position: fixed;

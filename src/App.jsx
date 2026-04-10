@@ -2,7 +2,6 @@ import React from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import AdminLayout from './components/Layout/AdminLayout'
-import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Students from './pages/Students'
@@ -17,7 +16,7 @@ function App() {
     <AuthProvider>
       <HashRouter>
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
 
           <Route element={<AdminLayout />}>
