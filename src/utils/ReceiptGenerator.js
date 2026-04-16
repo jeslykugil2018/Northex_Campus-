@@ -313,7 +313,7 @@ export const generateInvoice = (invoiceData) => {
         doc.setFont('helvetica', 'bold');
         doc.text('Date:', 20, detailsY);
         doc.setFont('helvetica', 'normal');
-        doc.text(format(new Date(), 'MMMM dd, yyyy'), 33, detailsY);
+        doc.text(invoiceData.date ? format(new Date(invoiceData.date), 'MMMM dd, yyyy') : format(new Date(), 'MMMM dd, yyyy'), 33, detailsY);
 
         doc.setFont('helvetica', 'bold');
         doc.text('Student Name:', 20, detailsY + 12);
@@ -322,19 +322,19 @@ export const generateInvoice = (invoiceData) => {
 
         // Column 2
         doc.setFont('helvetica', 'bold');
-        doc.text('Due Date:', 120, detailsY);
+        doc.text('Contact:', 120, detailsY);
         doc.setFont('helvetica', 'normal');
-        doc.text(invoiceData.dueDate ? format(new Date(invoiceData.dueDate), 'MMMM dd, yyyy') : 'On Receipt', 140, detailsY);
+        doc.text(invoiceData.phone || 'N/A', 138, detailsY);
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Contact:', 120, detailsY + 12);
+        doc.text('Email:', 120, detailsY + 12);
         doc.setFont('helvetica', 'normal');
-        doc.text(invoiceData.phone || 'N/A', 138, detailsY + 12);
+        doc.text(invoiceData.email || 'N/A', 138, detailsY + 12);
 
         // ==========================================
         // 3. Line Items Table
         // ==========================================
-        const tableY = detailsY + 30;
+        const tableY = detailsY + 40;
         const itemRows = invoiceData.items.map(item => [
             item.description,
             `Rs. ${Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`

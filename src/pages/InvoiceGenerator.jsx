@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { FileText, Plus, Trash2, Download, User, Calendar, Receipt, DollarSign } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
 import { generateInvoice } from '../utils/ReceiptGenerator'
 
 const generateId = () => {
@@ -12,30 +10,16 @@ const generateId = () => {
 };
 
 const InvoiceGenerator = () => {
-    const { adminRecord, selectedCampusId } = useAuth()
-    const [students, setStudents] = useState([])
     const [loading, setLoading] = useState(false)
-    const [selectedStudent, setSelectedStudent] = useState(null)
-    const [recordInFinance, setRecordInFinance] = useState(true)
     const [invoiceData, setInvoiceData] = useState({
         id: generateId(),
-        dueDate: '',
+        date: '',
         notes: '',
-        items: [{ id: generateId(), description: '', amount: '' }]
+        email: '',
+        items: [{ id: generateId(), description: '', amount: '' }],
+        manualStudentName: '',
+        phone: ''
     })
-
-    useEffect(() => {
-        fetchStudents()
-    }, [adminRecord, selectedCampusId])
-
-    const fetchStudents = async () => {
-        let query = supabase.from('students').select('id, full_name, phone, course, batch')
-        if (selectedCampusId && selectedCampusId !== 'all') {
-            query = query.eq('campus_id', selectedCampusId)
-        }
-        const { data } = await query
-        setStudents(data || [])
-    }
 
     const handleAddItem = () => {
         setInvoiceData({
@@ -68,32 +52,13 @@ const InvoiceGenerator = () => {
 
     const total = subtotal
 
-    const recordPaymentInFinance = async (finalTotal, studentId) => {
-        try {
-            const { error } = await supabase
-                .from('payments')
-                .insert([{
-                    student_id: studentId,
-                    amount: finalTotal,
-                    method: 'Bank Transfer',
-                    note: `Automated Invoice Entry: ${invoiceData.items.map(i => i.description).join(', ')} (INV-${invoiceData.id.substring(0, 8).toUpperCase()})`,
-                    created_at: new Date().toISOString()
-                }])
 
-            if (error) throw error
-            return true
-        } catch (err) {
-            console.error('Record Payment Error:', err)
-            alert('Failed to record in Finance: ' + err.message)
-            return false
-        }
-    }
 
     const handleGenerate = async () => {
-        const studentName = selectedStudent ? selectedStudent.full_name : invoiceData.manualStudentName;
+        const studentName = invoiceData.manualStudentName;
 
         if (!studentName) {
-            alert('Please select a student or enter a name.')
+            alert('Please enter a student name.')
             return
         }
 
@@ -104,22 +69,11 @@ const InvoiceGenerator = () => {
         
         setLoading(true)
 
-        // Record in Finance if linked to a registered student
-        if (recordInFinance && selectedStudent) {
-            const success = await recordPaymentInFinance(total, selectedStudent.id)
-            if (!success) {
-                if (!confirm('Failed to record in Finance history. Continue generating PDF anyway?')) {
-                    setLoading(false)
-                    return
-                }
-            }
-        }
-        
         const finalData = {
             ...invoiceData,
             studentName: studentName,
-            course: selectedStudent?.course || invoiceData.course || '',
-            phone: selectedStudent?.phone || invoiceData.phone || '',
+            phone: invoiceData.phone || '',
+            email: invoiceData.email || '',
         }
         
         generateInvoice(finalData)
@@ -150,24 +104,6 @@ const InvoiceGenerator = () => {
                             <h3>Client Information</h3>
                         </div>
                         <div className="form-grid">
-                            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                <label>Link to Student Registry</label>
-                                <select 
-                                    onChange={(e) => {
-                                        const s = students.find(stud => stud.id === e.target.value)
-                                        setSelectedStudent(s)
-                                        if (s) {
-                                            setInvoiceData(prev => ({...prev, manualStudentName: s.full_name, course: s.course}))
-                                        }
-                                    }}
-                                    className="select-input"
-                                >
-                                    <option value="">Manual Entry (Unlinked)</option>
-                                    {students.map(s => (
-                                        <option key={s.id} value={s.id}>{s.full_name} ({s.course})</option>
-                                    ))}
-                                </select>
-                            </div>
                             <div className="form-group">
                                 <label>Student Name</label>
                                 <input 
@@ -175,27 +111,6 @@ const InvoiceGenerator = () => {
                                     placeholder="Enter full name"
                                     value={invoiceData.manualStudentName || ''}
                                     onChange={(e) => setInvoiceData({...invoiceData, manualStudentName: e.target.value})}
-                                />
-                            </div>
-                            {selectedStudent && (
-                                <div className="form-group">
-                                    <label className="checkbox-label">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={recordInFinance}
-                                            onChange={(e) => setRecordInFinance(e.target.checked)}
-                                        />
-                                        Record in Finance History
-                                    </label>
-                                </div>
-                            )}
-                            <div className="form-group">
-                                <label>Course (Optional)</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="Course name"
-                                    value={invoiceData.course || ''}
-                                    onChange={(e) => setInvoiceData({...invoiceData, course: e.target.value})}
                                 />
                             </div>
                             <div className="form-group">
@@ -208,11 +123,20 @@ const InvoiceGenerator = () => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Due Date</label>
+                                <label>Email Address</label>
+                                <input 
+                                    type="email" 
+                                    placeholder="Email address"
+                                    value={invoiceData.email || ''}
+                                    onChange={(e) => setInvoiceData({...invoiceData, email: e.target.value})}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Date</label>
                                 <input 
                                     type="date" 
-                                    value={invoiceData.dueDate}
-                                    onChange={(e) => setInvoiceData({...invoiceData, dueDate: e.target.value})}
+                                    value={invoiceData.date}
+                                    onChange={(e) => setInvoiceData({...invoiceData, date: e.target.value})}
                                 />
                             </div>
                         </div>
@@ -384,15 +308,7 @@ const InvoiceGenerator = () => {
 
                 .discount-input { width: 120px; text-align: right; }
                 
-                .checkbox-label {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    font-size: 0.9rem;
-                    cursor: pointer;
-                    margin-top: 1.5rem;
-                }
-                .checkbox-label input { width: auto; margin: 0; }
+
                 
                 textarea {
                     width: 100%;
