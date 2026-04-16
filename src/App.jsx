@@ -17,15 +17,14 @@ function App() {
     <AuthProvider>
       <HashRouter>
         <Routes>
-          <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
 
           <Route element={<AdminLayout />}>
+            <Route path="/" element={<InvoiceGenerator />} />
             <Route path="/select-campus" element={<CampusSelection />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/students" element={<Students />} />
             <Route path="/finance" element={<Finance />} />
-            <Route path="/invoice-generator" element={<InvoiceGenerator />} />
             <Route path="/campuses" element={<Campuses />} />
             <Route path="/support" element={<Support />} />
             <Route path="/admins" element={<Admins />} />

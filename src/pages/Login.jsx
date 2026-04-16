@@ -15,7 +15,7 @@ const Login = () => {
   // Redirect if already logged in and verified
   useEffect(() => {
     if (user && adminRecord) {
-      navigate('/dashboard')
+      navigate('/')
     }
   }, [user, adminRecord, navigate])
 
