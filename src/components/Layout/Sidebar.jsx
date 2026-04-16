@@ -8,10 +8,10 @@ const Sidebar = () => {
   const location = useLocation()
 
   const navItems = [
-    { label: 'Invoice Generator', icon: FileText, path: '/' },
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
     { label: 'Student Registry', icon: GraduationCap, path: '/students' },
     { label: 'Finance', icon: Landmark, path: '/finance' },
+    { label: 'Invoice Generator', icon: FileText, path: '/invoice' },
     ...(adminRecord?.role === 'Super Admin' ? [{ label: 'Campus Settings', icon: Landmark, path: '/campuses' }] : []),
     { label: 'Help & Support', icon: HelpCircle, path: '/support' },
   ]
