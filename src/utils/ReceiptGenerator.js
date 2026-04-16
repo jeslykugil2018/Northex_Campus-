@@ -251,3 +251,174 @@ export const generateReceipt = (payment, allStudentPayments = []) => {
         alert('Could not generate receipt: ' + err.message);
     }
 };
+
+export const generateInvoice = (invoiceData) => {
+    console.log('--- Generating Premium Tabular Invoice ---');
+
+    try {
+        const doc = new jsPDF();
+        const center = 105;
+        const colors = {
+            blueAccent: [0, 106, 255],
+            textDark: [30, 30, 30],
+            border: [230, 230, 230],
+            muted: [100, 100, 100],
+            success: [22, 163, 74],
+        };
+
+        // ==========================================
+        // 1. Premium Branded Header
+        // ==========================================
+        const logoY = 15;
+        doc.setFillColor(0, 106, 255);
+        doc.rect(center - 30, logoY, 60, 28, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text('NORTHEX', center, logoY + 12, { align: 'center' });
+        doc.setFillColor(255, 255, 255);
+        doc.rect(center - 26, logoY + 15, 52, 9, 'F');
+        doc.setTextColor(0, 0, 0);
+        doc.text('CAMPUS', center, logoY + 22, { align: 'center' });
+        
+        doc.setFontSize(8.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...colors.muted);
+        doc.text('Industry-Standard Digital Skills Training • Northex Campus • Mullaitivu', center, logoY + 40, { align: 'center' });
+        
+        doc.setDrawColor(...colors.border);
+        doc.setLineWidth(0.2);
+        doc.line(40, logoY + 46, 170, logoY + 46);
+
+        // ==========================================
+        // 2. Invoice Title & Details
+        // ==========================================
+        const titleY = logoY + 60;
+        doc.setTextColor(...colors.textDark);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('OFFICIAL INVOICE', center, titleY, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(110, 110, 110);
+        doc.text(`REF: INV-${invoiceData.id.substring(0, 8).toUpperCase()}`, center, titleY + 7, { align: 'center' });
+
+        // Identification Details (Two Columns)
+        const detailsY = titleY + 20;
+        doc.setFontSize(10.5);
+        doc.setTextColor(...colors.textDark);
+
+        // Column 1
+        doc.setFont('helvetica', 'bold');
+        doc.text('Date:', 20, detailsY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(format(new Date(), 'MMMM dd, yyyy'), 33, detailsY);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Student Name:', 20, detailsY + 12);
+        doc.setFont('helvetica', 'normal');
+        doc.text(invoiceData.studentName.toUpperCase(), 48, detailsY + 12);
+
+        // Column 2
+        doc.setFont('helvetica', 'bold');
+        doc.text('Due Date:', 120, detailsY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(invoiceData.dueDate ? format(new Date(invoiceData.dueDate), 'MMMM dd, yyyy') : 'On Receipt', 140, detailsY);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Contact:', 120, detailsY + 12);
+        doc.setFont('helvetica', 'normal');
+        doc.text(invoiceData.phone || 'N/A', 138, detailsY + 12);
+
+        // ==========================================
+        // 3. Line Items Table
+        // ==========================================
+        const tableY = detailsY + 30;
+        const itemRows = invoiceData.items.map(item => [
+            item.description,
+            `Rs. ${Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+        ]);
+
+        autoTable(doc, {
+            startY: tableY,
+            head: [['Description', 'Amount (LKR)']],
+            body: itemRows,
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [51, 65, 85], fontStyle: 'bold', halign: 'center' },
+            bodyStyles: { fontSize: 10, halign: 'center' },
+            columnStyles: { 0: { halign: 'left' } }
+        });
+
+        // ==========================================
+        // 4. Totals Calculation
+        // ==========================================
+        const finalY = doc.lastAutoTable.finalY + 10;
+        const subtotal = invoiceData.items.reduce((sum, item) => sum + Number(item.amount), 0);
+        const discount = Number(invoiceData.discount || 0);
+        const total = subtotal - discount;
+
+        doc.setFontSize(10.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Subtotal:', 140, finalY);
+        doc.text(`Rs. ${subtotal.toLocaleString()}`, 190, finalY, { align: 'right' });
+
+        if (discount > 0) {
+            doc.text('Discount:', 140, finalY + 8);
+            doc.setTextColor(220, 38, 38);
+            doc.text(`- Rs. ${discount.toLocaleString()}`, 190, finalY + 8, { align: 'right' });
+            doc.setTextColor(...colors.textDark);
+        }
+
+        doc.setLineWidth(0.5);
+        doc.line(135, finalY + 12, 190, finalY + 12);
+        
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text('TOTAL DUE:', 140, finalY + 20);
+        doc.setTextColor(...colors.blueAccent);
+        doc.text(`Rs. ${total.toLocaleString()}`, 190, finalY + 20, { align: 'right' });
+
+        // ==========================================
+        // 5. Official Validation (Seal & Signature)
+        // ==========================================
+        const stampY = 240;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(30, stampY + 10, 80, stampY + 10);
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7);
+        doc.setTextColor(...colors.textDark);
+        doc.text('R. Vaakeshan', 55, stampY + 16, { align: 'center' });
+        doc.setFontSize(6.5);
+        doc.text('NORTHEX CAMPUS Director', 55, stampY + 21, { align: 'center' });
+
+        // ==========================================
+        // 6. Notes & Final Message
+        // ==========================================
+        if (invoiceData.notes) {
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...colors.textDark);
+            doc.text('Notes:', 20, stampY - 20);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.text(invoiceData.notes, 20, stampY - 14);
+        }
+
+        const finalMessageY = 280;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(80, 80, 80);
+        doc.text('This is an official billing document. Thank you for choosing NORTHEX CAMPUS.', center, finalMessageY, { align: 'center' });
+        doc.text('We appreciate your continued support and commitment.', center, finalMessageY + 6, { align: 'center' });
+
+        // Save
+        const safeName = invoiceData.studentName.replace(/\s+/g, '_');
+        doc.save(`Official_Invoice_${safeName}.pdf`);
+
+    } catch (err) {
+        console.error('Invoice Generation Error:', err);
+        alert('Could not generate invoice: ' + err.message);
+    }
+};
+

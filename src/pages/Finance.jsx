@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, CreditCard, Receipt, Plus, Download, ArrowLeft, Edit2, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,10 +14,20 @@ const FEE_BREAKDOWN = [
     { label: '2nd Installment', amount: 45000 },
 ]
 
+const PREDEFINED_COURSES = [
+    'Video Editing',
+    'Graphic Design',
+    'Full Stack Development',
+    'Digital Marketing',
+    'UI/UX Design',
+    'Business Management'
+]
+
 const Finance = () => {
     const { adminRecord, selectedCampusId } = useAuth()
     const [payments, setPayments] = useState([])
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
@@ -25,11 +35,30 @@ const Finance = () => {
     const [editingPayment, setEditingPayment] = useState(null)
     const [students, setStudents] = useState([])
     const [searchFilter, setSearchFilter] = useState('')
+    const [courseFilter, setCourseFilter] = useState('All')
+    const [batchFilter, setBatchFilter] = useState('All')
 
     useEffect(() => {
         fetchPayments()
         fetchStudents()
     }, [adminRecord, selectedCampusId])
+
+    // Detect student_id from URL (Cross-page shortcut)
+    useEffect(() => {
+        const studentIdParam = searchParams.get('student_id')
+        if (studentIdParam && students.length > 0) {
+            const student = students.find(s => s.id === studentIdParam)
+            if (student) {
+                setNewPayment(prev => ({ ...prev, student_id: student.id }))
+                setShowModal(true)
+                
+                // Clear the param from URL without refreshing
+                const newParams = new URLSearchParams(searchParams)
+                newParams.delete('student_id')
+                setSearchParams(newParams, { replace: true })
+            }
+        }
+    }, [searchParams, students])
 
     const fetchPayments = async () => {
         if (!adminRecord) return
@@ -37,7 +66,7 @@ const Finance = () => {
 
         let query = supabase
             .from('payments')
-            .select('*, students!inner(full_name, email, phone, district, campus_id, campuses(name))')
+            .select('*, students!inner(full_name, email, phone, district, campus_id, course, batch, campuses(name))')
             .order('created_at', { ascending: false })
 
         // Filter by campus if applicable
@@ -53,7 +82,7 @@ const Finance = () => {
     }
 
     const fetchStudents = async () => {
-        let query = supabase.from('students').select('id, full_name, campus_id, campuses(name)')
+        let query = supabase.from('students').select('id, full_name, phone, campus_id, course, batch, campuses(name)')
 
         if (selectedCampusId && selectedCampusId !== 'all') {
             query = query.eq('campus_id', selectedCampusId)
@@ -67,7 +96,13 @@ const Finance = () => {
 
     // Per-student fee status calculation
     const studentFeeStatus = useMemo(() => {
-        return students.map(student => {
+        return students
+            .filter(s => {
+                const matchesCourse = courseFilter === 'All' || s.course === courseFilter
+                const matchesBatch = batchFilter === 'All' || s.batch === batchFilter
+                return matchesCourse && matchesBatch
+            })
+            .map(student => {
             const studentPayments = payments.filter(p => p.student_id === student.id)
             const totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0)
             const remaining = Math.max(0, COURSE_FEE - totalPaid)
@@ -177,11 +212,12 @@ const Finance = () => {
     }
 
     const exportToCSV = () => {
-        const headers = ['Date', 'Student', 'Campus', 'Method', 'Amount']
-        const rows = payments.map(p => [
+        const headers = ['Date', 'Student', 'Course', 'Batch', 'Method', 'Amount']
+        const rows = filteredPayments.map(p => [
             format(new Date(p.created_at), 'yyyy-MM-dd'),
             p.students?.full_name,
-            p.students?.campuses?.name,
+            p.students?.course,
+            p.students?.batch,
             p.method,
             p.amount
         ])
@@ -197,13 +233,20 @@ const Finance = () => {
         link.click()
     }
 
-    // Filtered payments for search
+    // Filtered payments for search and filters
     const filteredPayments = useMemo(() => {
-        if (!searchFilter) return payments
-        return payments.filter(p =>
-            p.students?.full_name?.toLowerCase().includes(searchFilter.toLowerCase())
-        )
-    }, [payments, searchFilter])
+        return payments.filter(p => {
+            const matchesSearch = !searchFilter || p.students?.full_name?.toLowerCase().includes(searchFilter.toLowerCase())
+            const matchesCourse = courseFilter === 'All' || p.students?.course === courseFilter
+            const matchesBatch = batchFilter === 'All' || p.students?.batch === batchFilter
+            return matchesSearch && matchesCourse && matchesBatch
+        })
+    }, [payments, searchFilter, courseFilter, batchFilter])
+
+    const batchesList = useMemo(() => {
+        const batches = [...new Set(students.map(s => s.batch).filter(Boolean))]
+        return batches.sort()
+    }, [students])
 
     return (
         <div className="finance-page">
@@ -218,9 +261,37 @@ const Finance = () => {
                         Export CSV
                     </button>
                     <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                        <Plus size={20} />
+                        {loading ? <div className="loading-spinner-sm" style={{ marginRight: '8px' }}></div> : <Plus size={20} />}
                         Record Payment
                     </button>
+                </div>
+            </div>
+            
+            <div className="utility-bar card">
+                <div className="search-box">
+                    <Search size={18} />
+                    <input
+                        type="text"
+                        placeholder="Search student fee status..."
+                        value={searchFilter}
+                        onChange={(e) => setSearchFilter(e.target.value)}
+                    />
+                </div>
+                <div className="filter-group">
+                    <div className="filter-select">
+                        <label>Course</label>
+                        <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}>
+                            <option value="All">All Courses</option>
+                            {PREDEFINED_COURSES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="filter-select">
+                        <label>Batch</label>
+                        <select value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
+                            <option value="All">All Batches</option>
+                            {batchesList.map(b => <option key={b} value={b}>{b}</option>)}
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -266,11 +337,11 @@ const Finance = () => {
                                 
                             </tr>
                         </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr><td colSpan="8" className="text-center py-8">
+                        <tbody style={{ opacity: loading && studentFeeStatus.length > 0 ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                            {loading && studentFeeStatus.length === 0 ? (
+                                <tr><td colSpan="8" className="text-center py-12">
                                     <div className="loading-spinner"></div>
-                                    <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Loading fee data...</p>
+                                    <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing fee status...</p>
                                 </td></tr>
                             ) : studentFeeStatus.length === 0 ? (
                                 <tr><td colSpan="8" className="text-center">No students found.</td></tr>
@@ -334,15 +405,15 @@ const Finance = () => {
                             <th className="text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan="8" className="text-center py-8">
-                                <div className="loading-spinner"></div>
-                                <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing financial data...</p>
-                            </td></tr>
-                        ) : filteredPayments.length === 0 ? (
-                            <tr><td colSpan="8" className="text-center">No payment records found.</td></tr>
-                        ) : filteredPayments.map((p) => (
+                        <tbody style={{ opacity: loading && filteredPayments.length > 0 ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                            {loading && filteredPayments.length === 0 ? (
+                                <tr><td colSpan="8" className="text-center py-12">
+                                    <div className="loading-spinner"></div>
+                                    <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing history...</p>
+                                </td></tr>
+                            ) : filteredPayments.length === 0 ? (
+                                <tr><td colSpan="8" className="text-center">No payment records found.</td></tr>
+                            ) : filteredPayments.map((p) => (
                             <tr key={p.id}>
                                 <td>{format(new Date(p.created_at), 'MMM dd, yyyy HH:mm')}</td>
                                 <td><strong>{p.students?.full_name}</strong></td>
@@ -390,17 +461,21 @@ const Finance = () => {
             {showModal && (
                 <div className="modal-overlay">
                     <div className="modal-card card">
-                        <h2>Record New Payment</h2>
+                        <h2>Record New Payment {newPayment.student_id && `for ${students.find(s => s.id === newPayment.student_id)?.full_name}`}</h2>
                         <form onSubmit={handleAddPayment}>
                             <div className="form-group">
-                                <label>Select Student</label>
+                                <label>Student Name</label>
                                 <select
                                     value={newPayment.student_id}
                                     onChange={(e) => setNewPayment({ ...newPayment, student_id: e.target.value })}
                                     required
                                 >
                                     <option value="">Choose student...</option>
-                                    {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                                    {students.map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.full_name}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="form-row">
@@ -938,6 +1013,67 @@ const Finance = () => {
         .icon-btn:hover { background: #f1f5f9; color: #006aff; }
         .icon-btn.text-error:hover { background: #fef2f2; color: #ef4444; }
         .text-error { color: #ef4444; }
+
+        .utility-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            padding: 1.25rem 1.75rem;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .filter-select {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .filter-select label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+        }
+
+        .filter-select select {
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background-color: white;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #1e293b;
+            min-width: 160px;
+        }
+
+        @media (max-width: 768px) {
+            .utility-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .filter-group {
+                flex-direction: column;
+            }
+        }
+
+        .loading-spinner-sm {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
       `}</style>
         </div>
     )

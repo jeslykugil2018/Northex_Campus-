@@ -10,6 +10,7 @@ import Campuses from './pages/Campuses'
 import CampusSelection from './pages/CampusSelection'
 import Support from './pages/Support'
 import Admins from './pages/Admins'
+import InvoiceGenerator from './pages/InvoiceGenerator'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/students" element={<Students />} />
             <Route path="/finance" element={<Finance />} />
+            <Route path="/invoice-generator" element={<InvoiceGenerator />} />
             <Route path="/campuses" element={<Campuses />} />
             <Route path="/support" element={<Support />} />
             <Route path="/admins" element={<Admins />} />

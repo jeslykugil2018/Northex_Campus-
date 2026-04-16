@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, GraduationCap, Landmark, LogOut, HelpCircle } from 'lucide-react'
+import { LayoutDashboard, GraduationCap, Landmark, LogOut, HelpCircle, FileText, Landmark as FinanceIcon } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 const Sidebar = () => {
@@ -9,6 +9,9 @@ const Sidebar = () => {
 
   const navItems = [
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { label: 'Student Registry', icon: GraduationCap, path: '/students' },
+    { label: 'Finance', icon: Landmark, path: '/finance' },
+    { label: 'Invoice Generator', icon: FileText, path: '/invoice-generator' },
     ...(adminRecord?.role === 'Super Admin' ? [{ label: 'Campus Settings', icon: Landmark, path: '/campuses' }] : []),
     { label: 'Help & Support', icon: HelpCircle, path: '/support' },
   ]

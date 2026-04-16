@@ -120,8 +120,9 @@ const Students = () => {
 
   const filteredStudents = useMemo(() => {
     return studentsWithPayments.filter(s => {
-      const matchesSearch = s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesSearch = s.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.phone?.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesDistrict = districtFilter === 'All' || s.district === districtFilter
       const matchesCourse = courseFilter === 'All' || s.course === courseFilter
       const matchesBatch = batchFilter === 'All' || s.batch === batchFilter
@@ -337,6 +338,7 @@ const Students = () => {
                       </td>
                       <td className="actions-cell">
                         <div className="action-row">
+                          <button className="icon-btn" onClick={() => navigate(`/finance?student_id=${student.id}`)} title="Record Payment"><DollarSign size={16} /></button>
                           <button className="icon-btn" onClick={() => handleOpenModal(student)} title="Edit"><Edit2 size={16} /></button>
                           <button className="icon-btn text-error" onClick={() => handleDelete(student.id)} title="Delete"><Trash2 size={16} /></button>
                           <button className="icon-btn" onClick={() => handleViewProfile(student)} title="View Detail"><ChevronRight size={16} /></button>
