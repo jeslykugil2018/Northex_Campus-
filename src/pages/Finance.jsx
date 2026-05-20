@@ -94,15 +94,18 @@ const Finance = () => {
         setStudents(data || [])
     }
 
+    // Filtered students based on course and batch
+    const filteredStudents = useMemo(() => {
+        return students.filter(s => {
+            const matchesCourse = courseFilter === 'All' || s.course === courseFilter
+            const matchesBatch = batchFilter === 'All' || s.batch === batchFilter
+            return matchesCourse && matchesBatch
+        }).sort((a, b) => a.full_name.localeCompare(b.full_name))
+    }, [students, courseFilter, batchFilter])
+
     // Per-student fee status calculation
     const studentFeeStatus = useMemo(() => {
-        return students
-            .filter(s => {
-                const matchesCourse = courseFilter === 'All' || s.course === courseFilter
-                const matchesBatch = batchFilter === 'All' || s.batch === batchFilter
-                return matchesCourse && matchesBatch
-            })
-            .map(student => {
+        return filteredStudents.map(student => {
             const studentPayments = payments.filter(p => p.student_id === student.id)
             const totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount), 0)
             const remaining = Math.max(0, COURSE_FEE - totalPaid)
@@ -244,9 +247,12 @@ const Finance = () => {
     }, [payments, searchFilter, courseFilter, batchFilter])
 
     const batchesList = useMemo(() => {
-        const batches = [...new Set(students.map(s => s.batch).filter(Boolean))]
+        const courseStudents = courseFilter === 'All' 
+            ? students 
+            : students.filter(s => s.course === courseFilter)
+        const batches = [...new Set(courseStudents.map(s => s.batch).filter(Boolean))]
         return batches.sort()
-    }, [students])
+    }, [students, courseFilter])
 
     return (
         <div className="finance-page">
@@ -471,7 +477,7 @@ const Finance = () => {
                                     required
                                 >
                                     <option value="">Choose student...</option>
-                                    {students.map(s => (
+                                    {filteredStudents.map(s => (
                                         <option key={s.id} value={s.id}>
                                             {s.full_name}
                                         </option>

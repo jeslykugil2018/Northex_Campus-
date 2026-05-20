@@ -228,7 +228,7 @@ export const generateReceipt = (payment, allStudentPayments = []) => {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(7);
         doc.setTextColor(...colors.textDark);
-        doc.text('R. Vaakeshan', 55, stampY + 16, { align: 'center' });
+        doc.text('R. Vakeesan', 55, stampY + 16, { align: 'center' });
         doc.setFontSize(6.5);
         doc.text('NORTHEX CAMPUS Director', 55, stampY + 21, { align: 'center' });
 
@@ -388,7 +388,7 @@ export const generateInvoice = (invoiceData) => {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(7);
         doc.setTextColor(...colors.textDark);
-        doc.text('R. Vaakeshan', 55, stampY + 16, { align: 'center' });
+        doc.text('R. Vakeesan', 55, stampY + 16, { align: 'center' });
         doc.setFontSize(6.5);
         doc.text('NORTHEX CAMPUS Director', 55, stampY + 21, { align: 'center' });
 
