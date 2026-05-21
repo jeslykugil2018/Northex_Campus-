@@ -37,6 +37,7 @@ const Finance = () => {
     const [searchFilter, setSearchFilter] = useState('')
     const [courseFilter, setCourseFilter] = useState('All')
     const [batchFilter, setBatchFilter] = useState('All')
+    const [activeTab, setActiveTab] = useState('fee-status')
 
     useEffect(() => {
         fetchPayments()
@@ -322,167 +323,175 @@ const Finance = () => {
 
 
 
-            {/* ── Per-Student Fee Status ── */}
-            <div className="payments-list card" style={{ marginBottom: '2.5rem' }}>
-                <div className="card-header">
-                    <h3>Per-Student Fee Status</h3>
-                    <span className="header-badge">{courseFilter === 'All' || batchFilter === 'All' ? 0 : studentFeeStatus.length} students</span>
-                </div>
-                {courseFilter === 'All' || batchFilter === 'All' ? (
-                    <div className="empty-selection-state">
-                        <div className="empty-icon-wrap">
-                            <Search size={32} />
-                        </div>
-                        <h3>Select Course & Batch</h3>
-                        <p>Please select a specific course and batch from the filters above to view student fee statuses.</p>
+            <>
+                <div className="finance-tabs">
+                        <button 
+                            className={`finance-tab ${activeTab === 'fee-status' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('fee-status')}
+                        >
+                            Per-Student Fee Status
+                        </button>
+                        <button 
+                            className={`finance-tab ${activeTab === 'history' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('history')}
+                        >
+                            Payment History
+                        </button>
                     </div>
-                ) : (
-                    <div className="fee-status-table-wrap">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Campus</th>
-                                    <th className="text-right">Total Fee</th>
-                                    <th className="text-right">Paid</th>
-                                    <th className="text-right">Remaining</th>
-                                    <th>Registration</th>
-                                    <th>1st Installment</th>
-                                    <th>2nd Installment</th>
-                                    
-                                </tr>
-                            </thead>
-                            <tbody style={{ opacity: loading && studentFeeStatus.length > 0 ? 0.6 : 1, transition: 'opacity 0.2s' }}>
-                                {loading && studentFeeStatus.length === 0 ? (
-                                    <tr><td colSpan="8" className="text-center py-12">
-                                        <div className="loading-spinner"></div>
-                                        <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing fee status...</p>
-                                    </td></tr>
-                                ) : studentFeeStatus.length === 0 ? (
-                                    <tr><td colSpan="8" className="text-center">No students found.</td></tr>
-                                ) : studentFeeStatus.map(s => (
-                                    <tr key={s.id}>
-                                        <td><strong>{s.full_name}</strong></td>
-                                        <td>{s.campuses?.name || '—'}</td>
-                                        <td className="text-right">LKR {COURSE_FEE.toLocaleString()}</td>
-                                        <td className="text-right"><strong className="text-success">LKR {s.totalPaid.toLocaleString()}</strong></td>
-                                        <td className="text-right">
-                                            <strong className={s.remaining > 0 ? 'text-warning' : 'text-success'}>
-                                                {s.remaining > 0 ? `LKR ${s.remaining.toLocaleString()}` : 'Settled'}
-                                            </strong>
-                                        </td>
-                                        {s.installmentStatus.map((inst, idx) => (
-                                            <td key={idx}>
-                                                <div className="installment-detail">
-                                                    <div className={`inst-paid ${inst.status}`}>
-                                                        <span className="inst-label">Paid:</span>
-                                                        <span className="inst-value">LKR {inst.paidAmount?.toLocaleString()}</span>
-                                                    </div>
-                                                    <div className={`inst-remaining ${inst.remainingAmount > 0 ? 'has-balance' : 'settled'}`}>
-                                                        <span className="inst-label">Due:</span>
-                                                        <span className="inst-value">{inst.remainingAmount > 0 ? `LKR ${inst.remainingAmount?.toLocaleString()}` : 'Settled'}</span>
-                                                    </div>
+
+                    {activeTab === 'fee-status' && (
+                        <div className="payments-list card" style={{ marginBottom: '2.5rem' }}>
+                            {/* ── Per-Student Fee Status ── */}
+                            <div className="card-header">
+                                <h3>Per-Student Fee Status</h3>
+                                <span className="header-badge">{studentFeeStatus.length} students</span>
+                            </div>
+                            
+                            <div className="fee-status-table-wrap">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Student</th>
+                                            <th>Campus</th>
+                                            <th className="text-right">Total Fee</th>
+                                            <th className="text-right">Paid</th>
+                                            <th className="text-right">Remaining</th>
+                                            <th>Registration</th>
+                                            <th>1st Installment</th>
+                                            <th>2nd Installment</th>
+                                            
+                                        </tr>
+                                    </thead>
+                                    <tbody style={{ opacity: loading && studentFeeStatus.length > 0 ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                                        {studentFeeStatus.map(s => (
+                                            <tr key={s.id}>
+                                                <td><strong>{s.full_name}</strong></td>
+                                                <td>{s.campuses?.name || '—'}</td>
+                                                <td className="text-right">LKR {COURSE_FEE.toLocaleString()}</td>
+                                                <td className="text-right"><strong className="text-success">LKR {s.totalPaid.toLocaleString()}</strong></td>
+                                                <td className="text-right">
+                                                    <strong className={s.remaining > 0 ? 'text-warning' : 'text-success'}>
+                                                        {s.remaining > 0 ? `LKR ${s.remaining.toLocaleString()}` : 'Settled'}
+                                                    </strong>
+                                                </td>
+                                                {s.installmentStatus.map((inst, idx) => (
+                                                    <td key={idx}>
+                                                        <div className="installment-detail">
+                                                            <div className={`inst-paid ${inst.status}`}>
+                                                                <span className="inst-label">Paid:</span>
+                                                                <span className="inst-value">LKR {inst.paidAmount?.toLocaleString()}</span>
+                                                            </div>
+                                                            <div className={`inst-remaining ${inst.remainingAmount > 0 ? 'has-balance' : 'settled'}`}>
+                                                                <span className="inst-label">Due:</span>
+                                                                <span className="inst-value">{inst.remainingAmount > 0 ? `LKR ${inst.remainingAmount?.toLocaleString()}` : 'Settled'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            {studentFeeStatus.length === 0 && !loading && (
+                                <div className="text-center py-12" style={{ padding: '2rem' }}>No students found for this selection.</div>
+                            )}
+                            {studentFeeStatus.length === 0 && loading && (
+                                <div className="text-center py-12" style={{ padding: '2rem' }}>
+                                    <div className="loading-spinner"></div>
+                                    <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing fee status...</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'history' && (
+                        <div className="payments-list card">
+                            {/* ── Payment History ── */}
+                            <div className="card-header">
+                                <h3>Payment History</h3>
+                                <div className="search-box">
+                                    <Search size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Filter by student..."
+                                        value={searchFilter}
+                                        onChange={(e) => setSearchFilter(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Student</th>
+                                        <th>Campus</th>
+                                        <th>Method</th>
+                                        <th className="text-right">Amount</th>
+                                        <th>Status</th>
+                                        <th>Receipt</th>
+                                        <th className="text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody style={{ opacity: loading && filteredPayments.length > 0 ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                                    {filteredPayments.map((p) => (
+                                        <tr key={p.id}>
+                                            <td>{format(new Date(p.created_at), 'MMM dd, yyyy HH:mm')}</td>
+                                            <td><strong>{p.students?.full_name}</strong></td>
+                                            <td>{p.students?.campuses?.name}</td>
+                                            <td>
+                                                <span className="method-tag">
+                                                    <CreditCard size={12} /> {p.method}
+                                                </span>
+                                            </td>
+                                            <td className="text-right"><strong className="text-success">LKR {Number(p.amount).toFixed(2)}</strong></td>
+                                            <td><span className="status-badge active">Cleared</span></td>
+                                            <td>
+                                                <button
+                                                    className="receipt-download-btn"
+                                                    onClick={() => generateReceipt(p, payments.filter(pay => pay.student_id === p.student_id))}
+                                                >
+                                                    <Download size={14} />
+                                                    Download Receipt
+                                                </button>
+                                            </td>
+                                            <td className="actions-cell">
+                                                <div className="action-row">
+                                                    <button
+                                                        className="icon-btn"
+                                                        onClick={() => handleEditPayment(p)}
+                                                        title="Edit"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button
+                                                        className="icon-btn text-error"
+                                                        onClick={() => handleDeletePayment(p.id)}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
                                                 </div>
                                             </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-
-            {/* ── Payment History ── */}
-            <div className="payments-list card">
-                <div className="card-header">
-                    <h3>Payment History</h3>
-                    <div className="search-box">
-                        <Search size={16} />
-                        <input
-                            type="text"
-                            placeholder="Filter by student..."
-                            value={searchFilter}
-                            onChange={(e) => setSearchFilter(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {courseFilter === 'All' || batchFilter === 'All' ? (
-                    <div className="empty-selection-state">
-                        <div className="empty-icon-wrap">
-                            <Receipt size={32} />
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            
+                            {filteredPayments.length === 0 && !loading && (
+                                <div className="text-center py-12" style={{ padding: '2rem' }}>No payment records found.</div>
+                            )}
+                            {filteredPayments.length === 0 && loading && (
+                                <div className="text-center py-12" style={{ padding: '2rem' }}>
+                                    <div className="loading-spinner"></div>
+                                    <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing history...</p>
+                                </div>
+                            )}
                         </div>
-                        <h3>Select Course & Batch</h3>
-                        <p>Please select a specific course and batch to view payment history.</p>
-                    </div>
-                ) : (
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Student</th>
-                                <th>Campus</th>
-                                <th>Method</th>
-                                <th className="text-right">Amount</th>
-                                <th>Status</th>
-                                <th>Receipt</th>
-                                <th className="text-right">Actions</th>
-                            </tr>
-                        </thead>
-                            <tbody style={{ opacity: loading && filteredPayments.length > 0 ? 0.6 : 1, transition: 'opacity 0.2s' }}>
-                                {loading && filteredPayments.length === 0 ? (
-                                    <tr><td colSpan="8" className="text-center py-12">
-                                        <div className="loading-spinner"></div>
-                                        <p style={{ marginTop: '1rem', color: '#94a3b8', fontWeight: 600 }}>Syncing history...</p>
-                                    </td></tr>
-                                ) : filteredPayments.length === 0 ? (
-                                    <tr><td colSpan="8" className="text-center">No payment records found.</td></tr>
-                                ) : filteredPayments.map((p) => (
-                                <tr key={p.id}>
-                                    <td>{format(new Date(p.created_at), 'MMM dd, yyyy HH:mm')}</td>
-                                    <td><strong>{p.students?.full_name}</strong></td>
-                                    <td>{p.students?.campuses?.name}</td>
-                                    <td>
-                                        <span className="method-tag">
-                                            <CreditCard size={12} /> {p.method}
-                                        </span>
-                                    </td>
-                                    <td className="text-right"><strong className="text-success">LKR {Number(p.amount).toFixed(2)}</strong></td>
-                                    <td><span className="status-badge active">Cleared</span></td>
-                                    <td>
-                                        <button
-                                            className="receipt-download-btn"
-                                            onClick={() => generateReceipt(p, payments.filter(pay => pay.student_id === p.student_id))}
-                                        >
-                                            <Download size={14} />
-                                            Download Receipt
-                                        </button>
-                                    </td>
-                                    <td className="actions-cell">
-                                        <div className="action-row">
-                                            <button
-                                                className="icon-btn"
-                                                onClick={() => handleEditPayment(p)}
-                                                title="Edit"
-                                            >
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button
-                                                className="icon-btn text-error"
-                                                onClick={() => handleDeletePayment(p.id)}
-                                                title="Delete"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+                    )}
+                </>
 
             {showModal && (
                 <div className="modal-overlay">
@@ -655,6 +664,45 @@ const Finance = () => {
             max-width: 400px;
             margin: 0 auto;
             line-height: 1.5;
+        }
+
+        .finance-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0;
+        }
+
+        .finance-tab {
+            background: none;
+            border: none;
+            padding: 1rem 1.5rem;
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #64748b;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .finance-tab:hover {
+            color: #0f172a;
+        }
+
+        .finance-tab.active {
+            color: #006aff;
+        }
+
+        .finance-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #006aff;
+            border-radius: 4px 4px 0 0;
         }
 
         .header-actions {
