@@ -98,11 +98,12 @@ const Finance = () => {
     // Filtered students based on course and batch
     const filteredStudents = useMemo(() => {
         return students.filter(s => {
+            const matchesSearch = !searchFilter || s.full_name.toLowerCase().includes(searchFilter.toLowerCase())
             const matchesCourse = courseFilter === 'All' || s.course === courseFilter
             const matchesBatch = batchFilter === 'All' || s.batch === batchFilter
-            return matchesCourse && matchesBatch
+            return matchesSearch && matchesCourse && matchesBatch
         }).sort((a, b) => a.full_name.localeCompare(b.full_name))
-    }, [students, courseFilter, batchFilter])
+    }, [students, courseFilter, batchFilter, searchFilter])
 
     // Per-student fee status calculation
     const studentFeeStatus = useMemo(() => {
@@ -136,7 +137,7 @@ const Finance = () => {
                 paymentCount: studentPayments.length
             }
         })
-    }, [students, payments])
+    }, [filteredStudents, payments])
 
 
 
@@ -287,7 +288,10 @@ const Finance = () => {
                 <div className="filter-group">
                     <div className="filter-select">
                         <label>Course</label>
-                        <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}>
+                        <select value={courseFilter} onChange={(e) => {
+                            setCourseFilter(e.target.value)
+                            setBatchFilter('All')
+                        }}>
                             <option value="All">All Courses</option>
                             {PREDEFINED_COURSES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
