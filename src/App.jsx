@@ -11,6 +11,8 @@ import CampusSelection from './pages/CampusSelection'
 import Support from './pages/Support'
 import Admins from './pages/Admins'
 import InvoiceGenerator from './pages/InvoiceGenerator'
+import Courses from './pages/Courses'
+import Batches from './pages/Batches'
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
             <Route path="/campuses" element={<Campuses />} />
             <Route path="/support" element={<Support />} />
             <Route path="/admins" element={<Admins />} />
+            <Route path="/courses" element={<Courses />} />
+            <Route path="/batches" element={<Batches />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS admins (
 -- 4. Create Payments Table
 CREATE TABLE IF NOT EXISTS payments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  student_id UUID REFERENCES students(id) NOT NULL,
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE NOT NULL,
   amount NUMERIC NOT NULL,
   method TEXT DEFAULT 'Cash',
   note TEXT,
@@ -107,7 +107,42 @@ WITH CHECK (
   )
 );
 
--- 10. INITIAL SETUP (RUN THESE IN ORDER)
+-- 10. Create Courses Table
+CREATE TABLE IF NOT EXISTS courses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 11. Create Batches Table
+CREATE TABLE IF NOT EXISTS batches (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+  campus_id UUID REFERENCES campuses(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE batches ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Everyone can view courses" ON courses;
+CREATE POLICY "Everyone can view courses" ON courses FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Super Admins can manage courses" ON courses;
+CREATE POLICY "Super Admins can manage courses" ON courses FOR ALL USING (
+  EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid() AND admins.role = 'Super Admin')
+);
+
+DROP POLICY IF EXISTS "Everyone can view batches" ON batches;
+CREATE POLICY "Everyone can view batches" ON batches FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Super Admins can manage batches" ON batches;
+CREATE POLICY "Super Admins can manage batches" ON batches FOR ALL USING (
+  EXISTS (SELECT 1 FROM admins WHERE admins.user_id = auth.uid() AND admins.role = 'Super Admin')
+);
+
+-- 12. INITIAL SETUP (RUN THESE IN ORDER)
 
 -- A. Create first campuses
 INSERT INTO campuses (name) VALUES ('Northex'), ('UpBold') ON CONFLICT DO NOTHING;
